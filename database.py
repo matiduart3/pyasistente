@@ -1,6 +1,6 @@
 import os
 import psycopg2
-from psycopg2 import sql, OperationalError
+from psycopg2 import OperationalError
 from dotenv import load_dotenv
 
 # Cargar variables de entorno desde .env
@@ -9,78 +9,106 @@ load_dotenv()
 # Configuración de la base de datos
 DATABASE_URL = os.getenv("DATABASE_URL")
 
+# Validar que la variable DATABASE_URL esté cargada
+if not DATABASE_URL:
+    print("❌ ERROR: La variable DATABASE_URL no está definida en Railway.")
+else:
+    print(f"✅ Conectando a la base de datos: {DATABASE_URL}")
+
 # Conectar a la base de datos PostgreSQL
 def connect_db():
     try:
-        conn = psycopg2.connect(DATABASE_URL, sslmode="prefer")  # Mejor compatibilidad en Railway
+        conn = psycopg2.connect(DATABASE_URL, sslmode="require")  # Modo seguro
         cursor = conn.cursor()
         return conn, cursor
     except OperationalError as e:
-        print(f"❌ Error al conectar a la base de datos: {e}")
-        return None, None  # Devolver None en caso de fallo
+        print(f"❌ ERROR al conectar a la base de datos: {e}")
+        return None, None  # Devuelve None si hay un error
 
 # Crear tabla si no existe
 def create_table():
     conn, cursor = connect_db()
     if conn is None:
-        return  # No intentar crear la tabla si la conexión falló
+        print("⚠️ No se pudo crear la tabla porque la conexión falló.")
+        return  
     
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id SERIAL PRIMARY KEY,
-            phone TEXT UNIQUE,
-            username TEXT UNIQUE
-        )
-    ''')
-    conn.commit()
-    conn.close()
-    print("✅ Tabla 'users' verificada o creada en la base de datos.")
+    try:
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                phone TEXT UNIQUE NOT NULL,
+                username TEXT UNIQUE NOT NULL
+            )
+        ''')
+        conn.commit()
+        print("✅ Tabla 'users' verificada o creada en PostgreSQL.")
+    except Exception as e:
+        print(f"❌ ERROR al crear la tabla: {e}")
+    finally:
+        conn.close()
 
 # Obtener usuario asignado
 def get_user(phone):
     conn, cursor = connect_db()
     if conn is None:
-        return None  # Si la conexión falló, no hacer nada
+        return None  
     
-    cursor.execute("SELECT username FROM users WHERE phone = %s", (phone,))
-    user = cursor.fetchone()
-    conn.close()
-    return user[0] if user else None
+    try:
+        cursor.execute("SELECT username FROM users WHERE phone = %s", (phone,))
+        user = cursor.fetchone()
+        return user[0] if user else None
+    except Exception as e:
+        print(f"⚠️ ERROR al obtener usuario: {e}")
+        return None
+    finally:
+        conn.close()
 
-# Obtener el siguiente número disponible en la secuencia
+# Obtener el siguiente número disponible
 def get_next_user_number():
     conn, cursor = connect_db()
     if conn is None:
-        return "001"  # Si hay error, devolver 001 por defecto
+        return "001"  
     
-    cursor.execute("SELECT COALESCE(MAX(id) + 1, 1) FROM users")  # Obtener el próximo ID
-    count = cursor.fetchone()[0]
-    conn.close()
-    return f"{count:03d}"  # Formateamos el número con tres dígitos (001, 002, 003)
+    try:
+        cursor.execute("SELECT COUNT(*) FROM users")  
+        count = cursor.fetchone()[0] + 1  
+        return f"{count:03d}"  
+    except Exception as e:
+        print(f"⚠️ ERROR al obtener el siguiente usuario: {e}")
+        return "001"  
+    finally:
+        conn.close()
 
-# Asignar usuario único a un número
+# Asignar usuario único
 def assign_user(phone):
+    if not phone:
+        print("⚠️ ERROR: No se recibió un número de teléfono válido.")
+        return None  
+
     existing_user = get_user(phone)
     if existing_user:
         print(f"🔍 Usuario ya existente para {phone}: {existing_user}")
-        return existing_user  # Retorna el usuario si ya existe
+        return existing_user  
 
-    # Obtener el siguiente número de usuario
     user_number = get_next_user_number()
-    new_username = f"usuarioganamos{user_number}"  # Ejemplo: usuarioganamos001
+    new_username = f"usuarioganamos{user_number}"  
 
     print(f"🆕 Asignando nuevo usuario: {new_username} para {phone}")
 
     conn, cursor = connect_db()
     if conn is None:
-        return None  # No hacer nada si la conexión falló
+        return None  
 
-    cursor.execute("INSERT INTO users (phone, username) VALUES (%s, %s)", (phone, new_username))
-    conn.commit()
-    conn.close()
+    try:
+        cursor.execute("INSERT INTO users (phone, username) VALUES (%s, %s)", (phone, new_username))
+        conn.commit()
+        return new_username
+    except Exception as e:
+        print(f"❌ ERROR al asignar usuario: {e}")
+        return None
+    finally:
+        conn.close()
 
-    return new_username
-
-# Inicializar base de datos solo si este script es el principal
+# Inicializar base de datos si el script es el principal
 if __name__ == "__main__":
     create_table()
