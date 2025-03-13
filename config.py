@@ -11,4 +11,5 @@ TWILIO_PHONE_NUMBER = os.getenv("TWILIO_PHONE_NUMBER")
 
 MANYCHAT_API_KEY = os.getenv("MANYCHAT_API_KEY")
 
-DATABASE_FILE = "users.db"  # Archivo SQLite para almacenar usuarios
+# Configuración de la base de datos
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:jdKHAOZwTMUhEBdMqtbuWEPfRbDCopww@postgres.railway.internal:5432/railway")
