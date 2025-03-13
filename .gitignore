@@ -1,0 +1,13 @@
+# Ignorar ngrok.exe
+ngrok.exe
+
+# Ignorar entornos virtuales de Python
+venv/
+
+# Ignorar archivos de configuración sensibles
+.env
+
+# Archivos de caché y configuraciones locales
+__pycache__/
+*.sqlite
+*.db
